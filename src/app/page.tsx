@@ -1,7 +1,19 @@
 'use client';
 
-import { BarChart as ChartIcon, Edit2, Eye, EyeOff, PieChart as PieChartIcon, PlayCircle, PlusCircle, StopCircle, Trash2 } from 'lucide-react';
-import React, { KeyboardEvent, useEffect, useState } from 'react';
+import {
+	BarChart as ChartIcon,
+	Download,
+	Edit2,
+	Eye,
+	EyeOff,
+	PieChart as PieChartIcon,
+	PlayCircle,
+	PlusCircle,
+	StopCircle,
+	Trash2,
+	Upload,
+} from 'lucide-react';
+import React, { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Line, LineChart } from 'recharts';
 
@@ -10,6 +22,7 @@ interface Activity {
 	name: string;
 	timeSpent: { [date: string]: number };
 	isDeleted: boolean;
+	color: string;
 }
 
 interface TimerState {
@@ -27,6 +40,35 @@ export default function Home() {
 	const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
 	const [showAllStats, setShowAllStats] = useState(false);
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		const loadActivities = () => {
+			const savedActivities = localStorage.getItem('habitTrackerActivities');
+			if (savedActivities) {
+				try {
+					const parsedActivities = JSON.parse(savedActivities);
+					if (Array.isArray(parsedActivities)) {
+						setActivities(parsedActivities);
+					} else {
+						console.error('Saved activities is not an array:', parsedActivities);
+						setActivities([]);
+					}
+				} catch (error) {
+					console.error('Error parsing saved activities:', error);
+					setActivities([]);
+				}
+			}
+		};
+
+		loadActivities();
+	}, []);
+
+	useEffect(() => {
+		if (activities.length > 0) {
+			localStorage.setItem('habitTrackerActivities', JSON.stringify(activities));
+		}
+	}, [activities]);
 
 	useEffect(() => {
 		const loadActivities = () => {
@@ -63,13 +105,14 @@ export default function Home() {
 				name: newActivityName,
 				timeSpent: {},
 				isDeleted: false,
+				color: COLORS[activities.length % COLORS.length], // Assign default color
 			};
 			setActivities((prevActivities) => [...prevActivities, newActivity]);
 			setNewActivityName('');
 		}
 	};
 
-	const handleAddActivityKeyPress = (event: KeyboardEvent<HTMLInputElement>) => {
+	const handleAddActivityKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		if (event.key === 'Enter') {
 			addActivity();
 		}
@@ -80,7 +123,7 @@ export default function Home() {
 		setEditingActivity(null);
 	};
 
-	const handleUpdateActivityKeyPress = (event: KeyboardEvent<HTMLInputElement>, id: string) => {
+	const handleUpdateActivityKeyDown = (event: KeyboardEvent<HTMLInputElement>, id: string) => {
 		if (event.key === 'Enter') {
 			updateActivityName(id, event.currentTarget.value);
 		}
@@ -88,6 +131,10 @@ export default function Home() {
 
 	const deleteActivity = (id: string) => {
 		setActivities((prevActivities) => prevActivities.map((activity) => (activity.id === id ? { ...activity, isDeleted: true } : activity)));
+	};
+
+	const updateActivityColor = (id: string, newColor: string) => {
+		setActivities((prevActivities) => prevActivities.map((activity) => (activity.id === id ? { ...activity, color: newColor } : activity)));
 	};
 
 	const startTimer = (activityId: string) => {
@@ -164,23 +211,70 @@ export default function Home() {
 		const minutes = Math.floor((seconds % 3600) / 60);
 		return `${hours}h ${minutes}m`;
 	};
+	const exportData = () => {
+		const dataStr = JSON.stringify(activities);
+		const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+		const exportFileDefaultName = 'habit_tracker_data.json';
+
+		const linkElement = document.createElement('a');
+		linkElement.setAttribute('href', dataUri);
+		linkElement.setAttribute('download', exportFileDefaultName);
+		linkElement.click();
+	};
+
+	const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		if (file) {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				try {
+					const importedData = JSON.parse(e.target?.result as string);
+					if (
+						Array.isArray(importedData) &&
+						importedData.every(
+							(item) => typeof item === 'object' && 'id' in item && 'name' in item && 'timeSpent' in item && 'isDeleted' in item,
+						)
+					) {
+						setActivities(importedData);
+					} else {
+						alert('Invalid data format. Please use a valid exported file.');
+					}
+				} catch (error) {
+					console.error('Error parsing imported data:', error);
+					alert('Error importing data. Please try again with a valid file.');
+				}
+			};
+			reader.readAsText(file);
+		}
+	};
 
 	return (
 		<div className="container mx-auto p-4">
 			{/* <h1 className="text-3xl font-bold mb-6">Habit Tracker</h1> */}
 
-			<div className="mb-6">
-				<input
-					type="text"
-					value={newActivityName}
-					onChange={(e) => setNewActivityName(e.target.value)}
-					onKeyPress={handleAddActivityKeyPress}
-					placeholder="Enter new activity name"
-					className="p-2 border rounded mr-2"
-				/>
-				<button onClick={addActivity} className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
-					<PlusCircle className="inline-block mr-1" size={16} /> Add Activity
-				</button>
+			<div className="mb-6 flex justify-between items-center">
+				<div>
+					<input
+						type="text"
+						value={newActivityName}
+						onChange={(e) => setNewActivityName(e.target.value)}
+						onKeyDown={handleAddActivityKeyDown}
+						placeholder="Enter new activity name"
+						className="p-2 border rounded mr-2"
+					/>
+					<button onClick={addActivity} className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+						<PlusCircle className="inline-block mr-1" size={16} /> Add Activity
+					</button>
+				</div>
+				<div>
+					<button onClick={exportData} className="bg-green-500 text-white p-2 rounded hover:bg-green-600 mr-2">
+						<Download className="inline-block mr-1" size={16} /> Export Data
+					</button>
+					<input type="file" ref={fileInputRef} onChange={importData} style={{ display: 'none' }} accept=".json" />
+					<button onClick={() => fileInputRef.current?.click()} className="bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600">
+						<Upload className="inline-block mr-1" size={16} /> Import Data
+					</button>
+				</div>
 			</div>
 
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -192,7 +286,7 @@ export default function Home() {
 								<input
 									type="text"
 									defaultValue={activity.name}
-									onKeyPress={(e) => handleUpdateActivityKeyPress(e, activity.id)}
+									onKeyDown={(e) => handleUpdateActivityKeyDown(e, activity.id)}
 									onBlur={(e) => updateActivityName(activity.id, e.target.value)}
 									className="p-1 border rounded w-full mb-2"
 									autoFocus
@@ -207,6 +301,13 @@ export default function Home() {
 										<button onClick={() => deleteActivity(activity.id)} className="text-red-500 hover:text-red-700">
 											<Trash2 size={16} />
 										</button>
+										<input
+											type="color"
+											value={activity.color}
+											onChange={(e) => updateActivityColor(activity.id, e.target.value)}
+											className="w-6 h-6 rounded-full cursor-pointer"
+											title="Change color"
+										/>
 									</div>
 								</h2>
 							)}
@@ -294,8 +395,8 @@ export default function Home() {
 								<Legend />
 								{activities
 									.filter((activity) => !activity.isDeleted || showDeletedHabits)
-									.map((activity, index) => (
-										<Bar key={activity.id} dataKey={activity.name} stackId="a" fill={COLORS[index % COLORS.length]} />
+									.map((activity) => (
+										<Bar key={activity.id} dataKey={activity.name} stackId="a" fill={activity.color} />
 									))}
 							</BarChart>
 						</ResponsiveContainer>
@@ -309,8 +410,8 @@ export default function Home() {
 								<Legend />
 								{activities
 									.filter((activity) => !activity.isDeleted || showDeletedHabits)
-									.map((activity, index) => (
-										<Line key={activity.id} type="monotone" dataKey={activity.name} stroke={COLORS[index % COLORS.length]} />
+									.map((activity) => (
+										<Line key={activity.id} type="monotone" dataKey={activity.name} stroke={activity.color} />
 									))}
 							</LineChart>
 						</ResponsiveContainer>
@@ -328,7 +429,10 @@ export default function Home() {
 									dataKey="value"
 									label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
 									{getTotalTimeSpent().map((entry, index) => (
-										<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+										<Cell
+											key={`cell-${index}`}
+											fill={activities.find((a) => a.name === entry.name)?.color || COLORS[index % COLORS.length]}
+										/>
 									))}
 								</Pie>
 								<Tooltip />
