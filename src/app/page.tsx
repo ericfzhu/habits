@@ -29,8 +29,7 @@ interface Activity {
 }
 
 interface TimerState {
-	activityId: string | null;
-	startTime: number | null;
+	[activityId: string]: number | null;
 }
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -123,17 +122,21 @@ export default function Home() {
 	};
 
 	const startTimer = (activityId: string) => {
-		setTimerState({ activityId, startTime: Date.now() });
+		setTimerState((prevState) => ({
+			...prevState,
+			[activityId]: Date.now(),
+		}));
 	};
 
-	const stopTimer = () => {
-		if (timerState.activityId && timerState.startTime) {
-			const duration = Math.round((Date.now() - timerState.startTime) / 1000);
+	const stopTimer = (activityId: string) => {
+		const startTime = timerState[activityId];
+		if (startTime) {
+			const duration = Math.round((Date.now() - startTime) / 1000);
 			const today = new Date().toISOString().split('T')[0];
 
 			setActivities((prevActivities) =>
 				prevActivities.map((activity) =>
-					activity.id === timerState.activityId
+					activity.id === activityId
 						? {
 								...activity,
 								timeSpent: {
@@ -145,7 +148,11 @@ export default function Home() {
 				),
 			);
 
-			setTimerState({ activityId: null, startTime: null });
+			setTimerState((prevState) => {
+				const newState = { ...prevState };
+				delete newState[activityId];
+				return newState;
+			});
 		}
 	};
 
@@ -160,8 +167,8 @@ export default function Home() {
 		const today = new Date().toISOString().split('T')[0];
 		const baseTime = activity.timeSpent[today] || 0;
 
-		if (timerState.activityId === activity.id && timerState.startTime) {
-			const additionalTime = Math.floor((currentTime - timerState.startTime) / 1000);
+		if (timerState[activity.id]) {
+			const additionalTime = Math.floor((currentTime - timerState[activity.id]!) / 1000);
 			return baseTime + additionalTime;
 		}
 
@@ -311,8 +318,10 @@ export default function Home() {
 								</h2>
 							)}
 
-							{timerState.activityId === activity.id ? (
-								<button onClick={stopTimer} className="bg-red-500 text-white p-2 rounded hover:bg-red-600 w-full mb-2">
+							{timerState[activity.id] ? (
+								<button
+									onClick={() => stopTimer(activity.id)}
+									className="bg-red-500 text-white p-2 rounded hover:bg-red-600 w-full mb-2">
 									<StopCircle className="inline-block mr-1" size={16} /> Stop Timer
 								</button>
 							) : (
