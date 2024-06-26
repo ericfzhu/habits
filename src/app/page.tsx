@@ -1,6 +1,7 @@
 'use client';
 
 import {
+	Calendar,
 	BarChart as ChartIcon,
 	Download,
 	Edit2,
@@ -16,6 +17,8 @@ import {
 import React, { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Line, LineChart } from 'recharts';
+
+import ActivityCalendar from './calendar';
 
 interface Activity {
 	id: string;
@@ -40,7 +43,9 @@ export default function Home() {
 	const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
 	const [showAllStats, setShowAllStats] = useState(false);
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
+	const [showCalendarView, setShowCalendarView] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
 	useEffect(() => {
 		const loadActivities = () => {
@@ -71,32 +76,12 @@ export default function Home() {
 	}, [activities]);
 
 	useEffect(() => {
-		const loadActivities = () => {
-			const savedActivities = localStorage.getItem('habitTrackerActivities');
-			if (savedActivities) {
-				try {
-					const parsedActivities = JSON.parse(savedActivities);
-					if (Array.isArray(parsedActivities)) {
-						setActivities(parsedActivities);
-					} else {
-						console.error('Saved activities is not an array:', parsedActivities);
-						setActivities([]);
-					}
-				} catch (error) {
-					console.error('Error parsing saved activities:', error);
-					setActivities([]);
-				}
-			}
-		};
+		const timer = setInterval(() => {
+			setCurrentTime(Date.now());
+		}, 1000);
 
-		loadActivities();
+		return () => clearInterval(timer);
 	}, []);
-
-	useEffect(() => {
-		if (activities.length > 0) {
-			localStorage.setItem('habitTrackerActivities', JSON.stringify(activities));
-		}
-	}, [activities]);
 
 	const addActivity = () => {
 		if (newActivityName.trim() !== '') {
@@ -105,7 +90,7 @@ export default function Home() {
 				name: newActivityName,
 				timeSpent: {},
 				isDeleted: false,
-				color: COLORS[activities.length % COLORS.length], // Assign default color
+				color: COLORS[activities.length % COLORS.length],
 			};
 			setActivities((prevActivities) => [...prevActivities, newActivity]);
 			setNewActivityName('');
@@ -164,6 +149,25 @@ export default function Home() {
 		}
 	};
 
+	const formatTime = (seconds: number) => {
+		const hours = Math.floor(seconds / 3600);
+		const minutes = Math.floor((seconds % 3600) / 60);
+		const remainingSeconds = seconds % 60;
+		return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+	};
+
+	const getActivityTime = (activity: Activity) => {
+		const today = new Date().toISOString().split('T')[0];
+		const baseTime = activity.timeSpent[today] || 0;
+
+		if (timerState.activityId === activity.id && timerState.startTime) {
+			const additionalTime = Math.floor((currentTime - timerState.startTime) / 1000);
+			return baseTime + additionalTime;
+		}
+
+		return baseTime;
+	};
+
 	const getWeeklyData = (activity: Activity) => {
 		const today = new Date();
 		const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -206,11 +210,6 @@ export default function Home() {
 			}));
 	};
 
-	const formatTime = (seconds: number) => {
-		const hours = Math.floor(seconds / 3600);
-		const minutes = Math.floor((seconds % 3600) / 60);
-		return `${hours}h ${minutes}m`;
-	};
 	const exportData = () => {
 		const dataStr = JSON.stringify(activities);
 		const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
@@ -281,7 +280,7 @@ export default function Home() {
 				{activities
 					.filter((activity) => !activity.isDeleted)
 					.map((activity) => (
-						<div key={activity.id} className="border rounded p-4">
+						<div key={activity.id} className="border rounded p-4" style={{ borderColor: activity.color }}>
 							{editingActivity === activity.id ? (
 								<input
 									type="text"
@@ -298,7 +297,7 @@ export default function Home() {
 										<button onClick={() => setEditingActivity(activity.id)} className="text-gray-500 hover:text-gray-700 mr-2">
 											<Edit2 size={16} />
 										</button>
-										<button onClick={() => deleteActivity(activity.id)} className="text-red-500 hover:text-red-700">
+										<button onClick={() => deleteActivity(activity.id)} className="text-red-500 hover:text-red-700 mr-2">
 											<Trash2 size={16} />
 										</button>
 										<input
@@ -324,7 +323,7 @@ export default function Home() {
 								</button>
 							)}
 
-							<p className="mb-2">Today: {formatTime(activity.timeSpent[new Date().toISOString().split('T')[0]] || 0)}</p>
+							<p className="mb-2">Today: {formatTime(getActivityTime(activity))}</p>
 
 							<button
 								onClick={() => {
@@ -338,15 +337,15 @@ export default function Home() {
 					))}
 			</div>
 
-			<div className="flex justify-between items-center mb-8">
-				<button
+			<div className="flex justify-end items-end mb-8">
+				{/* <button
 					onClick={() => {
 						setShowAllStats(true);
 						setSelectedActivity(null);
 					}}
 					className="bg-indigo-500 text-white p-2 rounded hover:bg-indigo-600">
 					<PieChartIcon className="inline-block mr-1" size={16} /> View All Activities Summary
-				</button>
+				</button> */}
 				<button
 					onClick={() => setShowDeletedHabits(!showDeletedHabits)}
 					className={`${showDeletedHabits ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white p-2 rounded`}>
@@ -383,64 +382,72 @@ export default function Home() {
 				</div>
 			)}
 
-			{showAllStats && (
-				<div className="mt-8">
-					<h2 className="text-2xl font-bold mb-4">All Activities Summary</h2>
-					<div className="h-80 mb-8">
-						<ResponsiveContainer width="100%" height="100%">
-							<BarChart data={getAllActivitiesWeeklyData()}>
-								<XAxis dataKey="date" />
-								<YAxis />
-								<Tooltip />
-								<Legend />
-								{activities
-									.filter((activity) => !activity.isDeleted || showDeletedHabits)
-									.map((activity) => (
-										<Bar key={activity.id} dataKey={activity.name} stackId="a" fill={activity.color} />
-									))}
-							</BarChart>
-						</ResponsiveContainer>
-					</div>
-					<div className="h-80 mb-8">
-						<ResponsiveContainer width="100%" height="100%">
-							<LineChart data={getAllActivitiesWeeklyData()}>
-								<XAxis dataKey="date" />
-								<YAxis />
-								<Tooltip />
-								<Legend />
-								{activities
-									.filter((activity) => !activity.isDeleted || showDeletedHabits)
-									.map((activity) => (
-										<Line key={activity.id} type="monotone" dataKey={activity.name} stroke={activity.color} />
-									))}
-							</LineChart>
-						</ResponsiveContainer>
-					</div>
-					<div className="h-80">
-						<ResponsiveContainer width="100%" height="100%">
-							<PieChart>
-								<Pie
-									data={getTotalTimeSpent()}
-									cx="50%"
-									cy="50%"
-									labelLine={false}
-									outerRadius={80}
-									fill="#8884d8"
-									dataKey="value"
-									label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-									{getTotalTimeSpent().map((entry, index) => (
-										<Cell
-											key={`cell-${index}`}
-											fill={activities.find((a) => a.name === entry.name)?.color || COLORS[index % COLORS.length]}
-										/>
-									))}
-								</Pie>
-								<Tooltip />
-							</PieChart>
-						</ResponsiveContainer>
-					</div>
+			{/* Calendar View */}
+			{/* {showCalendarView && ( */}
+			<div className="mt-8">
+				<h2 className="text-2xl font-bold mb-4">Activity Calendar</h2>
+				<ActivityCalendar activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)} />
+			</div>
+			{/* )} */}
+
+			{/* {showAllStats && ( */}
+			<div className="mt-8">
+				<h2 className="text-2xl font-bold mb-4">All Activities Summary</h2>
+				<div className="h-80 mb-8">
+					<ResponsiveContainer width="100%" height="100%">
+						<BarChart data={getAllActivitiesWeeklyData()}>
+							<XAxis dataKey="date" />
+							<YAxis />
+							<Tooltip />
+							<Legend />
+							{activities
+								.filter((activity) => !activity.isDeleted || showDeletedHabits)
+								.map((activity) => (
+									<Bar key={activity.id} dataKey={activity.name} stackId="a" fill={activity.color} />
+								))}
+						</BarChart>
+					</ResponsiveContainer>
 				</div>
-			)}
+				<div className="h-80 mb-8">
+					<ResponsiveContainer width="100%" height="100%">
+						<LineChart data={getAllActivitiesWeeklyData()}>
+							<XAxis dataKey="date" />
+							<YAxis />
+							<Tooltip />
+							<Legend />
+							{activities
+								.filter((activity) => !activity.isDeleted || showDeletedHabits)
+								.map((activity) => (
+									<Line key={activity.id} type="monotone" dataKey={activity.name} stroke={activity.color} />
+								))}
+						</LineChart>
+					</ResponsiveContainer>
+				</div>
+				<div className="h-80">
+					<ResponsiveContainer width="100%" height="100%">
+						<PieChart>
+							<Pie
+								data={getTotalTimeSpent()}
+								cx="50%"
+								cy="50%"
+								labelLine={false}
+								outerRadius={80}
+								fill="#8884d8"
+								dataKey="value"
+								label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+								{getTotalTimeSpent().map((entry, index) => (
+									<Cell
+										key={`cell-${index}`}
+										fill={activities.find((a) => a.name === entry.name)?.color || COLORS[index % COLORS.length]}
+									/>
+								))}
+							</Pie>
+							<Tooltip />
+						</PieChart>
+					</ResponsiveContainer>
+				</div>
+			</div>
+			{/* )} */}
 		</div>
 	);
 }
