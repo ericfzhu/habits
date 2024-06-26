@@ -1,19 +1,6 @@
 'use client';
 
-import {
-	Calendar,
-	BarChart as ChartIcon,
-	Download,
-	Edit2,
-	Eye,
-	EyeOff,
-	PieChart as PieChartIcon,
-	PlayCircle,
-	PlusCircle,
-	StopCircle,
-	Trash2,
-	Upload,
-} from 'lucide-react';
+import { Download, Edit2, Eye, EyeOff, PlayCircle, PlusCircle, StopCircle, Trash2, Upload } from 'lucide-react';
 import React, { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Line, LineChart } from 'recharts';
