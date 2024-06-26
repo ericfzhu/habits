@@ -26,10 +26,7 @@ export default function Home() {
 	const [newActivityName, setNewActivityName] = useState('');
 	const [editingActivity, setEditingActivity] = useState<string | null>(null);
 	const [timerState, setTimerState] = useState<TimerState>({ activityId: null, startTime: null });
-	const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
-	const [showAllStats, setShowAllStats] = useState(false);
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
-	const [showCalendarView, setShowCalendarView] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
@@ -69,7 +66,7 @@ export default function Home() {
 		return () => clearInterval(timer);
 	}, []);
 
-	const addActivity = () => {
+	function addActivity() {
 		if (newActivityName.trim() !== '') {
 			const newActivity: Activity = {
 				id: Date.now().toString(),
@@ -81,41 +78,41 @@ export default function Home() {
 			setActivities((prevActivities) => [...prevActivities, newActivity]);
 			setNewActivityName('');
 		}
-	};
+	}
 
-	const handleAddActivityKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+	function handleAddActivityKeyDown(event: KeyboardEvent<HTMLInputElement>) {
 		if (event.key === 'Enter') {
 			addActivity();
 		}
-	};
+	}
 
-	const updateActivityName = (id: string, newName: string) => {
+	function updateActivityName(id: string, newName: string) {
 		setActivities((prevActivities) => prevActivities.map((activity) => (activity.id === id ? { ...activity, name: newName } : activity)));
 		setEditingActivity(null);
-	};
+	}
 
-	const handleUpdateActivityKeyDown = (event: KeyboardEvent<HTMLInputElement>, id: string) => {
+	function handleUpdateActivityKeyDown(event: KeyboardEvent<HTMLInputElement>, id: string) {
 		if (event.key === 'Enter') {
 			updateActivityName(id, event.currentTarget.value);
 		}
-	};
+	}
 
-	const deleteActivity = (id: string) => {
+	function deleteActivity(id: string) {
 		setActivities((prevActivities) => prevActivities.map((activity) => (activity.id === id ? { ...activity, isDeleted: true } : activity)));
-	};
+	}
 
-	const updateActivityColor = (id: string, newColor: string) => {
+	function updateActivityColor(id: string, newColor: string) {
 		setActivities((prevActivities) => prevActivities.map((activity) => (activity.id === id ? { ...activity, color: newColor } : activity)));
-	};
+	}
 
-	const startTimer = (activityId: string) => {
+	function startTimer(activityId: string) {
 		setTimerState((prevState) => ({
 			...prevState,
 			[activityId]: Date.now(),
 		}));
-	};
+	}
 
-	const stopTimer = (activityId: string) => {
+	function stopTimer(activityId: string) {
 		const startTime = timerState[activityId];
 		if (startTime) {
 			const duration = Math.round((Date.now() - startTime) / 1000);
@@ -141,16 +138,16 @@ export default function Home() {
 				return newState;
 			});
 		}
-	};
+	}
 
-	const formatTime = (seconds: number) => {
+	function formatTime(seconds: number) {
 		const hours = Math.floor(seconds / 3600);
 		const minutes = Math.floor((seconds % 3600) / 60);
 		const remainingSeconds = seconds % 60;
 		return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-	};
+	}
 
-	const getActivityTime = (activity: Activity) => {
+	function getActivityTime(activity: Activity) {
 		const today = new Date().toISOString().split('T')[0];
 		const baseTime = activity.timeSpent[today] || 0;
 
@@ -160,23 +157,9 @@ export default function Home() {
 		}
 
 		return baseTime;
-	};
+	}
 
-	const getWeeklyData = (activity: Activity) => {
-		const today = new Date();
-		const last7Days = Array.from({ length: 7 }, (_, i) => {
-			const date = new Date(today);
-			date.setDate(date.getDate() - i);
-			return date.toISOString().split('T')[0];
-		}).reverse();
-
-		return last7Days.map((date) => ({
-			date,
-			minutes: Math.round((activity.timeSpent[date] || 0) / 60),
-		}));
-	};
-
-	const getAllActivitiesWeeklyData = () => {
+	function getAllActivitiesWeeklyData() {
 		const today = new Date();
 		const last7Days = Array.from({ length: 7 }, (_, i) => {
 			const date = new Date(today);
@@ -193,18 +176,18 @@ export default function Home() {
 				});
 			return dayData;
 		});
-	};
+	}
 
-	const getTotalTimeSpent = () => {
+	function getTotalTimeSpent() {
 		return activities
 			.filter((activity) => !activity.isDeleted || showDeletedHabits)
 			.map((activity) => ({
 				name: activity.name,
 				value: Object.values(activity.timeSpent).reduce((sum, time) => sum + time, 0) / 60,
 			}));
-	};
+	}
 
-	const exportData = () => {
+	function exportData() {
 		const dataStr = JSON.stringify(activities);
 		const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
 		const exportFileDefaultName = 'habit_tracker_data.json';
@@ -213,33 +196,62 @@ export default function Home() {
 		linkElement.setAttribute('href', dataUri);
 		linkElement.setAttribute('download', exportFileDefaultName);
 		linkElement.click();
-	};
+	}
 
-	const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+	function importData(event: React.ChangeEvent<HTMLInputElement>) {
 		const file = event.target.files?.[0];
 		if (file) {
 			const reader = new FileReader();
 			reader.onload = (e) => {
 				try {
 					const importedData = JSON.parse(e.target?.result as string);
-					if (
-						Array.isArray(importedData) &&
-						importedData.every(
-							(item) => typeof item === 'object' && 'id' in item && 'name' in item && 'timeSpent' in item && 'isDeleted' in item,
-						)
-					) {
-						setActivities(importedData);
+					if (Array.isArray(importedData)) {
+						const validatedData = importedData
+							.map((item) => {
+								if (typeof item !== 'object' || item === null) {
+									console.warn('Invalid item:', item);
+									return null;
+								}
+
+								// Ensure all required fields are present
+								const validatedItem = {
+									id: item.id || Date.now().toString(),
+									name: item.name || 'Unnamed Activity',
+									timeSpent: typeof item.timeSpent === 'object' ? item.timeSpent : {},
+									isDeleted: item.isDeleted ?? false, // Use nullish coalescing to set default
+									color: item.color || COLORS[Math.floor(Math.random() * COLORS.length)],
+								};
+
+								// Check if all required fields are present and valid
+								if (!validatedItem.id || typeof validatedItem.name !== 'string' || typeof validatedItem.timeSpent !== 'object') {
+									console.warn('Item missing required fields or has invalid data:', item);
+									return null;
+								}
+
+								return validatedItem;
+							})
+							.filter((item) => item !== null) as Activity[];
+
+						if (validatedData.length === 0) {
+							alert('No valid data found in the imported file.');
+						} else if (validatedData.length < importedData.length) {
+							alert(`Imported ${validatedData.length} out of ${importedData.length} items. Some items were invalid and skipped.`);
+							setActivities(validatedData);
+						} else {
+							setActivities(validatedData);
+							alert('Data imported successfully!');
+						}
 					} else {
-						alert('Invalid data format. Please use a valid exported file.');
+						alert('Invalid data format. The file should contain an array of activities.');
 					}
 				} catch (error) {
 					console.error('Error parsing imported data:', error);
-					alert('Error importing data. Please try again with a valid file.');
+					alert('Error importing data. Please make sure the file contains valid JSON data.');
 				}
 			};
 			reader.readAsText(file);
 		}
-	};
+	}
 
 	return (
 		<div className="container mx-auto p-4">
