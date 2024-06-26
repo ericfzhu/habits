@@ -324,7 +324,7 @@ export default function Home() {
 							)}
 
 							<p className="mb-2">Today: {formatTime(getActivityTime(activity))}</p>
-
+							{/* 
 							<button
 								onClick={() => {
 									setSelectedActivity(activity.id);
@@ -332,7 +332,7 @@ export default function Home() {
 								}}
 								className="bg-purple-500 text-white p-2 rounded hover:bg-purple-600 w-full">
 								<ChartIcon className="inline-block mr-1" size={16} /> View Stats
-							</button>
+							</button> */}
 						</div>
 					))}
 			</div>
@@ -354,7 +354,7 @@ export default function Home() {
 				</button>
 			</div>
 
-			{selectedActivity && (
+			{/* {selectedActivity && (
 				<div className="mt-8">
 					<h2 className="text-2xl font-bold mb-4">Stats for {activities.find((a) => a.id === selectedActivity)?.name}</h2>
 					<div className="h-80 mb-8">
@@ -380,7 +380,7 @@ export default function Home() {
 						</ResponsiveContainer>
 					</div>
 				</div>
-			)}
+			)} */}
 
 			{/* Calendar View */}
 			{/* {showCalendarView && ( */}
