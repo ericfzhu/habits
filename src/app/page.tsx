@@ -29,6 +29,20 @@ export default function Home() {
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [currentTime, setCurrentTime] = useState<number>(Date.now());
+	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString());
+
+	function getLocalDateString(): string {
+		return new Intl.DateTimeFormat('en-US', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		})
+			.format(new Date())
+			.split('/')
+			.reverse()
+			.join('-');
+	}
 
 	useEffect(() => {
 		const loadActivities = () => {
@@ -60,11 +74,27 @@ export default function Home() {
 
 	useEffect(() => {
 		const timer = setInterval(() => {
-			setCurrentTime(Date.now());
+			const now = new Date();
+			setCurrentTime(now.getTime());
+			const newDate = getLocalDateString();
+			if (newDate !== currentDate) {
+				setCurrentDate(newDate);
+				handleDayTransition();
+			}
 		}, 1000);
 
 		return () => clearInterval(timer);
-	}, []);
+	}, [currentDate, activities, timerState]);
+
+	function handleDayTransition() {
+		// Stop all running timers and save their progress
+		Object.entries(timerState).forEach(([activityId, startTime]) => {
+			stopTimer(activityId);
+		});
+
+		// Clear the timer state for the new day
+		setTimerState({});
+	}
 
 	function addActivity() {
 		if (newActivityName.trim() !== '') {
@@ -115,8 +145,8 @@ export default function Home() {
 	function stopTimer(activityId: string) {
 		const startTime = timerState[activityId];
 		if (startTime) {
-			const duration = Math.round((Date.now() - startTime) / 1000);
-			const today = new Date().toISOString().split('T')[0];
+			const duration = Math.max(0, Math.round((Date.now() - startTime) / 1000));
+			const today = getLocalDateString();
 
 			setActivities((prevActivities) =>
 				prevActivities.map((activity) =>
@@ -141,24 +171,24 @@ export default function Home() {
 	}
 
 	function formatTime(seconds: number) {
+		if (seconds < 0) seconds = 0;
 		const hours = Math.floor(seconds / 3600);
 		const minutes = Math.floor((seconds % 3600) / 60);
 		const remainingSeconds = seconds % 60;
 		return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 	}
 
-	function getActivityTime(activity: Activity) {
-		const today = new Date().toISOString().split('T')[0];
+	function getActivityTime(activity: Activity): number {
+		const today = getLocalDateString();
 		const baseTime = activity.timeSpent[today] || 0;
 
 		if (timerState[activity.id]) {
-			const additionalTime = Math.floor((currentTime - timerState[activity.id]!) / 1000);
+			const additionalTime = Math.max(0, Math.floor((currentTime - timerState[activity.id]!) / 1000));
 			return baseTime + additionalTime;
 		}
 
 		return baseTime;
 	}
-
 	function getAllActivitiesWeeklyData() {
 		const today = new Date();
 		const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -256,6 +286,7 @@ export default function Home() {
 	return (
 		<div className="container mx-auto p-4">
 			{/* <h1 className="text-3xl font-bold mb-6">Habit Tracker</h1> */}
+			{/* <div>current time: {currentTime}</div> */}
 
 			<div className="mb-6 flex justify-between items-center">
 				<div>
