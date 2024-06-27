@@ -7,19 +7,24 @@ import { Line, LineChart } from 'recharts';
 
 import ActivityCalendar from './calendar';
 
+interface TimeBlock {
+	start: number;
+	end: number;
+}
+
 interface Activity {
 	id: string;
 	name: string;
-	timeSpent: { [date: string]: number };
+	timeBlocks: TimeBlock[];
 	isDeleted: boolean;
 	color: string;
 }
-
 interface TimerState {
 	[activityId: string]: number | null;
 }
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+const MERGE_THRESHOLD = 10 * 60 * 1000;
 
 export default function Home() {
 	const [activities, setActivities] = useState<Activity[]>([]);
@@ -29,19 +34,23 @@ export default function Home() {
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [currentTime, setCurrentTime] = useState<number>(Date.now());
-	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString());
+	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString(new Date()));
 
-	function getLocalDateString(): string {
-		return new Intl.DateTimeFormat('en-US', {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-		})
-			.format(new Date())
-			.split('/')
-			.reverse()
-			.join('-');
+	function getLocalDateString(date: Date): string {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
+	}
+
+	function normalizeTimeSpentDates(timeSpent: { [date: string]: number }): { [date: string]: number } {
+		const normalized: { [date: string]: number } = {};
+		for (const [date, duration] of Object.entries(timeSpent)) {
+			const [year, month, day] = date.split('-').map(Number);
+			const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+			normalized[normalizedDate] = duration;
+		}
+		return normalized;
 	}
 
 	useEffect(() => {
@@ -51,7 +60,11 @@ export default function Home() {
 				try {
 					const parsedActivities = JSON.parse(savedActivities);
 					if (Array.isArray(parsedActivities)) {
-						setActivities(parsedActivities);
+						const normalizedActivities = parsedActivities.map((activity) => ({
+							...activity,
+							timeSpent: normalizeTimeSpentDates(activity.timeSpent),
+						}));
+						setActivities(normalizedActivities);
 					} else {
 						console.error('Saved activities is not an array:', parsedActivities);
 						setActivities([]);
@@ -76,7 +89,7 @@ export default function Home() {
 		const timer = setInterval(() => {
 			const now = new Date();
 			setCurrentTime(now.getTime());
-			const newDate = getLocalDateString();
+			const newDate = getLocalDateString(now);
 			if (newDate !== currentDate) {
 				setCurrentDate(newDate);
 				handleDayTransition();
@@ -101,7 +114,7 @@ export default function Home() {
 			const newActivity: Activity = {
 				id: Date.now().toString(),
 				name: newActivityName,
-				timeSpent: {},
+				timeBlocks: [],
 				isDeleted: false,
 				color: COLORS[activities.length % COLORS.length],
 			};
@@ -145,21 +158,18 @@ export default function Home() {
 	function stopTimer(activityId: string) {
 		const startTime = timerState[activityId];
 		if (startTime) {
-			const duration = Math.max(0, Math.round((Date.now() - startTime) / 1000));
-			const today = getLocalDateString();
+			const endTime = Date.now();
 
 			setActivities((prevActivities) =>
-				prevActivities.map((activity) =>
-					activity.id === activityId
-						? {
-								...activity,
-								timeSpent: {
-									...activity.timeSpent,
-									[today]: (activity.timeSpent[today] || 0) + duration,
-								},
-							}
-						: activity,
-				),
+				prevActivities.map((activity) => {
+					if (activity.id === activityId) {
+						const newTimeBlock: TimeBlock = { start: startTime, end: endTime };
+						const existingTimeBlocks = Array.isArray(activity.timeBlocks) ? activity.timeBlocks : [];
+						const updatedTimeBlocks = mergeTimeBlocks([...existingTimeBlocks, newTimeBlock]);
+						return { ...activity, timeBlocks: updatedTimeBlocks };
+					}
+					return activity;
+				}),
 			);
 
 			setTimerState((prevState) => {
@@ -168,6 +178,26 @@ export default function Home() {
 				return newState;
 			});
 		}
+	}
+
+	function mergeTimeBlocks(timeBlocks: TimeBlock[]): TimeBlock[] {
+		if (timeBlocks.length <= 1) return timeBlocks;
+
+		const sortedBlocks = timeBlocks.sort((a, b) => a.start - b.start);
+		const mergedBlocks: TimeBlock[] = [sortedBlocks[0]];
+
+		for (let i = 1; i < sortedBlocks.length; i++) {
+			const currentBlock = sortedBlocks[i];
+			const lastMergedBlock = mergedBlocks[mergedBlocks.length - 1];
+
+			if (currentBlock.start - lastMergedBlock.end <= MERGE_THRESHOLD) {
+				lastMergedBlock.end = Math.max(lastMergedBlock.end, currentBlock.end);
+			} else {
+				mergedBlocks.push(currentBlock);
+			}
+		}
+
+		return mergedBlocks;
 	}
 
 	function formatTime(seconds: number) {
@@ -179,30 +209,45 @@ export default function Home() {
 	}
 
 	function getActivityTime(activity: Activity): number {
-		const today = getLocalDateString();
-		const baseTime = activity.timeSpent[today] || 0;
+		// in seconds
+		let totalTime = 0;
 
-		if (timerState[activity.id]) {
-			const additionalTime = Math.max(0, Math.floor((currentTime - timerState[activity.id]!) / 1000));
-			return baseTime + additionalTime;
+		if (Array.isArray(activity.timeBlocks)) {
+			totalTime = activity.timeBlocks.reduce((sum, block) => sum + (block.end - block.start), 0);
 		}
 
-		return baseTime;
+		if (timerState[activity.id]) {
+			totalTime += Date.now() - timerState[activity.id]!;
+		}
+
+		return Math.floor(totalTime / 1000); // Convert to seconds
 	}
+
 	function getAllActivitiesWeeklyData() {
 		const today = new Date();
 		const last7Days = Array.from({ length: 7 }, (_, i) => {
 			const date = new Date(today);
 			date.setDate(date.getDate() - i);
-			return date.toISOString().split('T')[0];
+			return date;
 		}).reverse();
 
 		return last7Days.map((date) => {
-			const dayData: { [key: string]: string | number } = { date };
+			const dateString = getLocalDateString(date);
+			const dayStart = new Date(date).setHours(0, 0, 0, 0);
+			const dayEnd = new Date(date).setHours(23, 59, 59, 999);
+
+			const dayData: { [key: string]: string | number } = { date: dateString };
 			activities
 				.filter((activity) => !activity.isDeleted || showDeletedHabits)
 				.forEach((activity) => {
-					dayData[activity.name] = Math.round((activity.timeSpent[date] || 0) / 60);
+					const timeSpentInMinutes = Array.isArray(activity.timeBlocks)
+						? activity.timeBlocks.reduce((total, block) => {
+								const blockStart = Math.max(block.start, dayStart);
+								const blockEnd = Math.min(block.end, dayEnd);
+								return total + Math.max(0, (blockEnd - blockStart) / 60000); // Convert ms to minutes
+							}, 0)
+						: 0;
+					dayData[activity.name] = Math.round(timeSpentInMinutes);
 				});
 			return dayData;
 		});
@@ -213,7 +258,9 @@ export default function Home() {
 			.filter((activity) => !activity.isDeleted || showDeletedHabits)
 			.map((activity) => ({
 				name: activity.name,
-				value: Object.values(activity.timeSpent).reduce((sum, time) => sum + time, 0) / 60,
+				value: Array.isArray(activity.timeBlocks)
+					? activity.timeBlocks.reduce((sum, block) => sum + (block.end - block.start), 0) / 60000 // Convert to minutes
+					: 0,
 			}));
 	}
 
@@ -244,18 +291,27 @@ export default function Home() {
 								}
 
 								// Ensure all required fields are present
-								const validatedItem = {
+								const validatedItem: Activity = {
 									id: item.id || Date.now().toString(),
 									name: item.name || 'Unnamed Activity',
-									timeSpent: typeof item.timeSpent === 'object' ? item.timeSpent : {},
-									isDeleted: item.isDeleted ?? false, // Use nullish coalescing to set default
+									timeBlocks: [],
+									isDeleted: item.isDeleted ?? false,
 									color: item.color || COLORS[Math.floor(Math.random() * COLORS.length)],
 								};
 
-								// Check if all required fields are present and valid
-								if (!validatedItem.id || typeof validatedItem.name !== 'string' || typeof validatedItem.timeSpent !== 'object') {
-									console.warn('Item missing required fields or has invalid data:', item);
-									return null;
+								// Convert old timeSpent format to timeBlocks if necessary
+								if (item.timeSpent && typeof item.timeSpent === 'object') {
+									Object.entries(item.timeSpent).forEach(([date, duration]) => {
+										const start = new Date(date).getTime();
+										validatedItem.timeBlocks.push({
+											start: start,
+											end: start + (duration as number) * 1000,
+										});
+									});
+								} else if (Array.isArray(item.timeBlocks)) {
+									validatedItem.timeBlocks = item.timeBlocks.filter(
+										(block: TimeBlock) => typeof block.start === 'number' && typeof block.end === 'number',
+									);
 								}
 
 								return validatedItem;
