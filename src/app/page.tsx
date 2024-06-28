@@ -61,10 +61,9 @@ export default function Home() {
 				try {
 					const parsedActivities = JSON.parse(savedActivities);
 					if (Array.isArray(parsedActivities)) {
-						const normalizedActivities = parsedActivities.map((activity) => ({
-							...activity,
-							timeSpent: normalizeTimeSpentDates(activity.timeSpent),
-						}));
+						const normalizedActivities = parsedActivities.map((activity) => {
+							return { ...activity, timeBlocks: Array.isArray(activity.timeBlocks) ? activity.timeBlocks : [] };
+						});
 						setActivities(normalizedActivities);
 					} else {
 						console.error('Saved activities is not an array:', parsedActivities);
