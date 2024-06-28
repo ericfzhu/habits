@@ -19,6 +19,7 @@ interface Activity {
 	isDeleted: boolean;
 	color: string;
 }
+
 interface TimerState {
 	[activityId: string]: number | null;
 }
@@ -34,6 +35,7 @@ export default function Home() {
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString(new Date()));
+	const [, setTick] = useState(0);
 
 	function getLocalDateString(date: Date): string {
 		const year = date.getFullYear();
@@ -91,10 +93,11 @@ export default function Home() {
 			if (newDate !== currentDate) {
 				setCurrentDate(newDate);
 			}
+			setTick((tick) => tick + 1); // Force a re-render every second
 		}, 1000);
 
 		return () => clearInterval(timer);
-	}, [currentDate, activities, timerState]);
+	}, [currentDate]);
 
 	function addActivity() {
 		if (newActivityName.trim() !== '') {
@@ -136,9 +139,35 @@ export default function Home() {
 	}
 
 	function startTimer(activityId: string) {
+		const now = Date.now();
+
+		setActivities((prevActivities) =>
+			prevActivities.map((activity) => {
+				if (activity.id === activityId) {
+					// Check if there's an existing time block that ended recently
+					const existingTimeBlocks = Array.isArray(activity.timeBlocks) ? activity.timeBlocks : [];
+					const lastBlock = existingTimeBlocks[existingTimeBlocks.length - 1];
+
+					if (lastBlock && now - lastBlock.end <= MERGE_THRESHOLD) {
+						// If the new start time is within the merge threshold of the last block's end time,
+						// extend the last block instead of creating a new one
+						const updatedLastBlock = { ...lastBlock, end: now };
+						const updatedTimeBlocks = [...existingTimeBlocks.slice(0, -1), updatedLastBlock];
+						return { ...activity, timeBlocks: updatedTimeBlocks };
+					} else {
+						// Otherwise, create a new time block
+						const newTimeBlock: TimeBlock = { start: now, end: now };
+						const updatedTimeBlocks = mergeTimeBlocks([...existingTimeBlocks, newTimeBlock]);
+						return { ...activity, timeBlocks: updatedTimeBlocks };
+					}
+				}
+				return activity;
+			}),
+		);
+
 		setTimerState((prevState) => ({
 			...prevState,
-			[activityId]: Date.now(),
+			[activityId]: now,
 		}));
 	}
 
