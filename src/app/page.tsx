@@ -495,14 +495,14 @@ export default function Home() {
 			{/* Calendar View */}
 			{/* {showCalendarView && ( */}
 			<div className="mt-8">
-				<h2 className="text-2xl font-bold mb-4">Activity Calendar</h2>
+				{/* <h2 className="text-2xl font-bold mb-4">Activity Calendar</h2> */}
 				<ActivityCalendar activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)} />
 			</div>
 			{/* )} */}
 
 			{/* {showAllStats && ( */}
 			<div className="mt-8">
-				<h2 className="text-2xl font-bold mb-4">All Activities Summary</h2>
+				{/* <h2 className="text-2xl font-bold mb-4">All Activities Summary</h2> */}
 				<div className="h-80 mb-8">
 					<ResponsiveContainer width="100%" height="100%">
 						<BarChart data={getAllActivitiesWeeklyData()}>
