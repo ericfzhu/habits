@@ -69,23 +69,36 @@ export default function ActivityCalendar({ activities }: ActivityCalendarProps) 
 		activities.forEach((activity) => {
 			if (Array.isArray(activity.timeBlocks)) {
 				activity.timeBlocks.forEach((block) => {
-					// Add individual time block
-					events.push({
-						title: activity.name,
-						start: new Date(block.start),
-						end: new Date(block.end),
-						resource: { ...activity, isTimeBlock: true },
-					});
+					const startMoment = moment(block.start);
+					const endMoment = moment(block.end);
 
-					// Accumulate for daily summary
-					const date = moment(block.start).format('YYYY-MM-DD');
-					if (!dailySummary[date]) {
-						dailySummary[date] = {};
+					// Split the block into daily events
+					let currentDay = startMoment.clone().startOf('day');
+					while (currentDay.isSameOrBefore(endMoment)) {
+						const nextDay = currentDay.clone().add(1, 'day');
+						const eventStart = moment.max(currentDay, startMoment);
+						const eventEnd = moment.min(nextDay.clone().subtract(1, 'minute'), endMoment);
+
+						// Add individual time block
+						events.push({
+							title: activity.name,
+							start: eventStart.toDate(),
+							end: eventEnd.toDate(),
+							resource: { ...activity, isTimeBlock: true },
+						});
+
+						// Accumulate for daily summary
+						const date = currentDay.format('YYYY-MM-DD');
+						if (!dailySummary[date]) {
+							dailySummary[date] = {};
+						}
+						if (!dailySummary[date][activity.name]) {
+							dailySummary[date][activity.name] = 0;
+						}
+						dailySummary[date][activity.name] += eventEnd.diff(eventStart);
+
+						currentDay = nextDay;
 					}
-					if (!dailySummary[date][activity.name]) {
-						dailySummary[date][activity.name] = 0;
-					}
-					dailySummary[date][activity.name] += block.end - block.start;
 				});
 			}
 		});
@@ -97,8 +110,8 @@ export default function ActivityCalendar({ activities }: ActivityCalendarProps) 
 				if (activity) {
 					events.push({
 						title: `${activityName}: ${formatDuration(duration)}`,
-						start: new Date(date),
-						end: new Date(date),
+						start: moment(date).startOf('day').toDate(),
+						end: moment(date).endOf('day').toDate(),
 						allDay: true,
 						resource: { ...activity, isSummary: true },
 					});
