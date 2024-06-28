@@ -33,7 +33,6 @@ export default function Home() {
 	const [timerState, setTimerState] = useState<TimerState>({ activityId: null, startTime: null });
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [currentTime, setCurrentTime] = useState<number>(Date.now());
 	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString(new Date()));
 
 	function getLocalDateString(date: Date): string {
@@ -88,26 +87,14 @@ export default function Home() {
 	useEffect(() => {
 		const timer = setInterval(() => {
 			const now = new Date();
-			setCurrentTime(now.getTime());
 			const newDate = getLocalDateString(now);
 			if (newDate !== currentDate) {
 				setCurrentDate(newDate);
-				handleDayTransition();
 			}
 		}, 1000);
 
 		return () => clearInterval(timer);
 	}, [currentDate, activities, timerState]);
-
-	function handleDayTransition() {
-		// Stop all running timers and save their progress
-		Object.entries(timerState).forEach(([activityId, startTime]) => {
-			stopTimer(activityId);
-		});
-
-		// Clear the timer state for the new day
-		setTimerState({});
-	}
 
 	function addActivity() {
 		if (newActivityName.trim() !== '') {
@@ -209,15 +196,24 @@ export default function Home() {
 	}
 
 	function getActivityTime(activity: Activity): number {
-		// in seconds
+		const now = Date.now();
+		const today = getLocalDateString(new Date(now));
+		const midnight = new Date(today).getTime();
 		let totalTime = 0;
 
+		// Calculate time from completed time blocks
 		if (Array.isArray(activity.timeBlocks)) {
-			totalTime = activity.timeBlocks.reduce((sum, block) => sum + (block.end - block.start), 0);
+			totalTime = activity.timeBlocks.reduce((sum, block) => {
+				const blockStart = Math.max(block.start, midnight);
+				const blockEnd = Math.min(block.end, now);
+				return sum + Math.max(0, blockEnd - blockStart);
+			}, 0);
 		}
 
+		// Add time from ongoing timer
 		if (timerState[activity.id]) {
-			totalTime += Date.now() - timerState[activity.id]!;
+			const timerStart = Math.max(timerState[activity.id]!, midnight);
+			totalTime += now - timerStart;
 		}
 
 		return Math.floor(totalTime / 1000); // Convert to seconds
@@ -419,15 +415,6 @@ export default function Home() {
 							)}
 
 							<p className="mb-2">Today: {formatTime(getActivityTime(activity))}</p>
-							{/* 
-							<button
-								onClick={() => {
-									setSelectedActivity(activity.id);
-									setShowAllStats(false);
-								}}
-								className="bg-purple-500 text-white p-2 rounded hover:bg-purple-600 w-full">
-								<ChartIcon className="inline-block mr-1" size={16} /> View Stats
-							</button> */}
 						</div>
 					))}
 			</div>
