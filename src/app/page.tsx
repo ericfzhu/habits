@@ -225,11 +225,11 @@ export default function Home() {
 
 	function getActivityTime(activity: Activity): number {
 		const now = Date.now();
-		const today = getLocalDateString(new Date(now));
-		const midnight = new Date(today).getTime();
+		const today = new Date(now);
+		today.setHours(0, 0, 0, 0);
+		const midnight = today.getTime();
 		let totalTime = 0;
 
-		// Calculate time from completed time blocks
 		if (Array.isArray(activity.timeBlocks)) {
 			totalTime = activity.timeBlocks.reduce((sum, block) => {
 				const blockStart = Math.max(block.start, midnight);
@@ -238,13 +238,12 @@ export default function Home() {
 			}, 0);
 		}
 
-		// Add time from ongoing timer
 		if (timerState[activity.id]) {
 			const timerStart = Math.max(timerState[activity.id]!, midnight);
 			totalTime += now - timerStart;
 		}
 
-		return Math.floor(totalTime / 1000); // Convert to seconds
+		return Math.floor(totalTime / 1000);
 	}
 
 	function getAllActivitiesWeeklyData() {
