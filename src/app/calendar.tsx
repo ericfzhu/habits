@@ -98,20 +98,20 @@ export default function ActivityCalendar({ activities, onUpdateTimeBlock }: Acti
 		};
 	}
 
-	function handleEventDrop({ event, start, end }: { event: Event; start: Date; end: Date }) {
+	function handleEventDrop({ event, start, end }: { event: Event; start: string | Date; end: string | Date }) {
 		const { activity, timeBlock } = event.resource as { activity: Activity; timeBlock: TimeBlock };
 		const newTimeBlock: TimeBlock = {
-			start: start.getTime(),
-			end: end.getTime(),
+			start: new Date(start).getTime(),
+			end: new Date(end).getTime(),
 		};
 		onUpdateTimeBlock(activity.id, timeBlock, newTimeBlock);
 	}
 
-	function handleEventResize({ event, start, end }: { event: Event; start: Date; end: Date }) {
+	function handleEventResize({ event, start, end }: { event: Event; start: string | Date; end: string | Date }) {
 		const { activity, timeBlock } = event.resource as { activity: Activity; timeBlock: TimeBlock };
 		const newTimeBlock: TimeBlock = {
-			start: start.getTime(),
-			end: end.getTime(),
+			start: new Date(start).getTime(),
+			end: new Date(end).getTime(),
 		};
 		onUpdateTimeBlock(activity.id, timeBlock, newTimeBlock);
 	}
@@ -123,8 +123,6 @@ export default function ActivityCalendar({ activities, onUpdateTimeBlock }: Acti
 			<DnDCalendar
 				localizer={localizer}
 				events={events}
-				startAccessor="start"
-				endAccessor="end"
 				views={['month', 'week']}
 				defaultView="month"
 				style={{ height: '100%' }}
