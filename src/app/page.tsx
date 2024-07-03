@@ -1,7 +1,8 @@
 'use client';
 
 import { Download, Edit2, Eye, EyeOff, PlayCircle, PlusCircle, StopCircle, Trash2, Upload } from 'lucide-react';
-import React, { KeyboardEvent, useEffect, useRef, useState } from 'react';
+import moment from 'moment';
+import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Line, LineChart } from 'recharts';
 
@@ -27,15 +28,81 @@ interface TimerState {
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 const MERGE_THRESHOLD = 10 * 60 * 1000;
 
+interface EditHabitsModalProps {
+	activities: Activity[];
+	onClose: () => void;
+	onUpdateTimeBlock: (activityId: string, timeBlockIndex: number, field: 'start' | 'end', value: string) => void;
+}
+
+function EditHabitsModal({ activities, onClose, onUpdateTimeBlock }: EditHabitsModalProps) {
+	const sortedActivities = useMemo(() => {
+		return [...activities].sort((a, b) => {
+			const aLatest = Math.max(...a.timeBlocks.map((block) => block.start));
+			const bLatest = Math.max(...b.timeBlocks.map((block) => block.start));
+			return bLatest - aLatest; // Sort in descending order (most recent first)
+		});
+	}, [activities]);
+
+	return (
+		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+			<div className="bg-white p-6 rounded-lg w-3/4 max-h-3/4 overflow-auto">
+				<h2 className="text-2xl font-bold mb-4">Edit Habit Times</h2>
+				<table className="w-full border-collapse border border-gray-300">
+					<thead>
+						<tr className="bg-gray-100">
+							<th className="border border-gray-300 p-2">Habit Name</th>
+							<th className="border border-gray-300 p-2">Start Time</th>
+							<th className="border border-gray-300 p-2">End Time</th>
+						</tr>
+					</thead>
+					<tbody>
+						{sortedActivities.flatMap((activity) =>
+							activity.timeBlocks
+								.sort((a, b) => b.start - a.start) // Sort time blocks within each activity
+								.map((timeBlock, index) => (
+									<tr key={`${activity.id}-${index}`}>
+										<td className="border border-gray-300 p-2">{activity.name}</td>
+										<td className="border border-gray-300 p-2">
+											<input
+												type="datetime-local"
+												value={moment(timeBlock.start).format('YYYY-MM-DDTHH:mm')}
+												onChange={(e) => onUpdateTimeBlock(activity.id, index, 'start', e.target.value)}
+												className="w-full p-1 border rounded"
+											/>
+										</td>
+										<td className="border border-gray-300 p-2">
+											<input
+												type="datetime-local"
+												value={moment(timeBlock.end).format('YYYY-MM-DDTHH:mm')}
+												onChange={(e) => onUpdateTimeBlock(activity.id, index, 'end', e.target.value)}
+												className="w-full p-1 border rounded"
+											/>
+										</td>
+									</tr>
+								)),
+						)}
+					</tbody>
+				</table>
+				<div className="mt-4 flex justify-end">
+					<button onClick={onClose} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+						Close
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export default function Home() {
 	const [activities, setActivities] = useState<Activity[]>([]);
 	const [newActivityName, setNewActivityName] = useState('');
 	const [editingActivity, setEditingActivity] = useState<string | null>(null);
-	const [timerState, setTimerState] = useState<TimerState>({ activityId: null, startTime: null });
+	const [timerState, setTimerState] = useState<{ [activityId: string]: number | null }>({});
 	const [showDeletedHabits, setShowDeletedHabits] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString(new Date()));
 	const [, setTick] = useState(0);
+	const [showEditModal, setShowEditModal] = useState(false);
 
 	function getLocalDateString(date: Date): string {
 		const year = date.getFullYear();
@@ -362,11 +429,36 @@ export default function Home() {
 		}
 	}
 
+	function handleUpdateTimeBlock(activityId: string, oldTimeBlock: TimeBlock, newTimeBlock: TimeBlock) {
+		setActivities((prevActivities) =>
+			prevActivities.map((activity) => {
+				if (activity.id === activityId) {
+					const updatedTimeBlocks = activity.timeBlocks.map((block) => (block === oldTimeBlock ? newTimeBlock : block));
+					return { ...activity, timeBlocks: updatedTimeBlocks };
+				}
+				return activity;
+			}),
+		);
+	}
+
+	function handleTimeBlockChange(activityId: string, timeBlockIndex: number, field: 'start' | 'end', value: string) {
+		setActivities((prevActivities) =>
+			prevActivities.map((activity) => {
+				if (activity.id === activityId) {
+					const updatedTimeBlocks = [...activity.timeBlocks];
+					updatedTimeBlocks[timeBlockIndex] = {
+						...updatedTimeBlocks[timeBlockIndex],
+						[field]: moment(value).valueOf(),
+					};
+					return { ...activity, timeBlocks: updatedTimeBlocks };
+				}
+				return activity;
+			}),
+		);
+	}
+
 	return (
 		<div className="container mx-auto p-4">
-			{/* <h1 className="text-3xl font-bold mb-6">Habit Tracker</h1> */}
-			{/* <div>current time: {currentTime}</div> */}
-
 			<div className="mb-6 flex justify-between items-center">
 				<div>
 					<input
@@ -447,14 +539,6 @@ export default function Home() {
 			</div>
 
 			<div className="flex justify-end items-end mb-8">
-				{/* <button
-					onClick={() => {
-						setShowAllStats(true);
-						setSelectedActivity(null);
-					}}
-					className="bg-indigo-500 text-white p-2 rounded hover:bg-indigo-600">
-					<PieChartIcon className="inline-block mr-1" size={16} /> View All Activities Summary
-				</button> */}
 				<button
 					onClick={() => setShowDeletedHabits(!showDeletedHabits)}
 					className={`${showDeletedHabits ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white p-2 rounded`}>
@@ -463,45 +547,29 @@ export default function Home() {
 				</button>
 			</div>
 
-			{/* {selectedActivity && (
-				<div className="mt-8">
-					<h2 className="text-2xl font-bold mb-4">Stats for {activities.find((a) => a.id === selectedActivity)?.name}</h2>
-					<div className="h-80 mb-8">
-						<ResponsiveContainer width="100%" height="100%">
-							<BarChart data={getWeeklyData(activities.find((a) => a.id === selectedActivity)!)}>
-								<XAxis dataKey="date" />
-								<YAxis />
-								<Tooltip />
-								<Legend />
-								<Bar dataKey="minutes" fill="#8884d8" name="Minutes" />
-							</BarChart>
-						</ResponsiveContainer>
-					</div>
-					<div className="h-80">
-						<ResponsiveContainer width="100%" height="100%">
-							<LineChart data={getWeeklyData(activities.find((a) => a.id === selectedActivity)!)}>
-								<XAxis dataKey="date" />
-								<YAxis />
-								<Tooltip />
-								<Legend />
-								<Line type="monotone" dataKey="minutes" stroke="#82ca9d" name="Minutes" />
-							</LineChart>
-						</ResponsiveContainer>
-					</div>
-				</div>
-			)} */}
-
 			{/* Calendar View */}
-			{/* {showCalendarView && ( */}
 			<div className="mt-8">
-				{/* <h2 className="text-2xl font-bold mb-4">Activity Calendar</h2> */}
-				<ActivityCalendar activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)} />
+				<ActivityCalendar
+					activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)}
+					onUpdateTimeBlock={handleUpdateTimeBlock}
+				/>
 			</div>
-			{/* )} */}
 
-			{/* {showAllStats && ( */}
+			<div className="mt-4 flex justify-end">
+				<button onClick={() => setShowEditModal(true)} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+					Edit Habits
+				</button>
+			</div>
+
+			{showEditModal && (
+				<EditHabitsModal
+					activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)}
+					onClose={() => setShowEditModal(false)}
+					onUpdateTimeBlock={handleTimeBlockChange}
+				/>
+			)}
+
 			<div className="mt-8">
-				{/* <h2 className="text-2xl font-bold mb-4">All Activities Summary</h2> */}
 				<div className="h-80 mb-8">
 					<ResponsiveContainer width="100%" height="100%">
 						<BarChart data={getAllActivitiesWeeklyData()}>
@@ -556,7 +624,6 @@ export default function Home() {
 					</ResponsiveContainer>
 				</div>
 			</div>
-			{/* )} */}
 		</div>
 	);
 }

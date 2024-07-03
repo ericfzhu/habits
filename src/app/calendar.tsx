@@ -1,9 +1,12 @@
 import moment from 'moment';
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import { Calendar, Event, View, momentLocalizer } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = momentLocalizer(moment);
+const DnDCalendar = withDragAndDrop(Calendar);
 
 interface TimeBlock {
 	start: number;
@@ -20,12 +23,13 @@ interface Activity {
 
 interface ActivityCalendarProps {
 	activities: Activity[];
+	onUpdateTimeBlock: (activityId: string, oldTimeBlock: TimeBlock, newTimeBlock: TimeBlock) => void;
 }
 
-export default function ActivityCalendar({ activities }: ActivityCalendarProps) {
+export default function ActivityCalendar({ activities, onUpdateTimeBlock }: ActivityCalendarProps) {
 	const [currentView, setCurrentView] = useState<View>('month');
 
-	const getMonthViewEvents = useCallback((): Event[] => {
+	function getMonthViewEvents(): Event[] {
 		const events: Event[] = [];
 		const dailySummary: { [date: string]: { [activityName: string]: number } } = {};
 
@@ -60,101 +64,63 @@ export default function ActivityCalendar({ activities }: ActivityCalendarProps) 
 		});
 
 		return events;
-	}, [activities]);
+	}
 
-	const getWeekViewEvents = useCallback((): Event[] => {
-		const events: Event[] = [];
-		const dailySummary: { [date: string]: { [activityName: string]: number } } = {};
+	function getWeekViewEvents(): Event[] {
+		return activities.flatMap((activity) =>
+			activity.timeBlocks.map((block) => ({
+				title: activity.name,
+				start: new Date(block.start),
+				end: new Date(Math.min(block.end, moment(block.start).endOf('day').valueOf())),
+				resource: { activity, timeBlock: block },
+			})),
+		);
+	}
 
-		activities.forEach((activity) => {
-			if (Array.isArray(activity.timeBlocks)) {
-				activity.timeBlocks.forEach((block) => {
-					const startMoment = moment(block.start);
-					const endMoment = moment(block.end);
-
-					// Split the block into daily events
-					let currentDay = startMoment.clone().startOf('day');
-					while (currentDay.isSameOrBefore(endMoment)) {
-						const nextDay = currentDay.clone().add(1, 'day');
-						const eventStart = moment.max(currentDay, startMoment);
-						const eventEnd = moment.min(nextDay.clone().subtract(1, 'minute'), endMoment);
-
-						// Add individual time block
-						events.push({
-							title: activity.name,
-							start: eventStart.toDate(),
-							end: eventEnd.toDate(),
-							resource: { ...activity, isTimeBlock: true },
-						});
-
-						// Accumulate for daily summary
-						const date = currentDay.format('YYYY-MM-DD');
-						if (!dailySummary[date]) {
-							dailySummary[date] = {};
-						}
-						if (!dailySummary[date][activity.name]) {
-							dailySummary[date][activity.name] = 0;
-						}
-						dailySummary[date][activity.name] += eventEnd.diff(eventStart);
-
-						currentDay = nextDay;
-					}
-				});
-			}
-		});
-
-		// Add daily summary events
-		Object.entries(dailySummary).forEach(([date, activitiesForDay]) => {
-			Object.entries(activitiesForDay).forEach(([activityName, duration]) => {
-				const activity = activities.find((a) => a.name === activityName);
-				if (activity) {
-					events.push({
-						title: `${activityName}: ${formatDuration(duration)}`,
-						start: moment(date).startOf('day').toDate(),
-						end: moment(date).endOf('day').toDate(),
-						allDay: true,
-						resource: { ...activity, isSummary: true },
-					});
-				}
-			});
-		});
-
-		return events;
-	}, [activities]);
-
-	const formatDuration = (ms: number): string => {
+	function formatDuration(ms: number): string {
 		const hours = Math.floor(ms / 3600000);
 		const minutes = Math.floor((ms % 3600000) / 60000);
 		return `${hours}h ${minutes}m`;
-	};
+	}
 
-	const eventStyleGetter = (event: Event) => {
-		const resource = event.resource as Activity & { isTimeBlock?: boolean; isSummary?: boolean };
-		const style: React.CSSProperties = {
-			backgroundColor: resource.color,
-			borderRadius: '5px',
-			opacity: 0.8,
-			color: 'white',
-			border: 'none',
-			display: 'block',
+	function eventStyleGetter(event: Event) {
+		const resource = event.resource as Activity | { activity: Activity };
+		const color = 'activity' in resource ? resource.activity.color : resource.color;
+		return {
+			style: {
+				backgroundColor: color,
+				borderRadius: '5px',
+				opacity: 0.8,
+				color: 'white',
+				border: 'none',
+				display: 'block',
+			},
 		};
+	}
 
-		if (resource.isSummary) {
-			style.backgroundColor = 'transparent';
-			style.color = resource.color;
-			style.border = `1px solid ${resource.color}`;
-			style.borderRadius = '0';
-			style.fontWeight = 'bold';
-		}
+	function handleEventDrop({ event, start, end }: { event: Event; start: Date; end: Date }) {
+		const { activity, timeBlock } = event.resource as { activity: Activity; timeBlock: TimeBlock };
+		const newTimeBlock: TimeBlock = {
+			start: start.getTime(),
+			end: end.getTime(),
+		};
+		onUpdateTimeBlock(activity.id, timeBlock, newTimeBlock);
+	}
 
-		return { style };
-	};
+	function handleEventResize({ event, start, end }: { event: Event; start: Date; end: Date }) {
+		const { activity, timeBlock } = event.resource as { activity: Activity; timeBlock: TimeBlock };
+		const newTimeBlock: TimeBlock = {
+			start: start.getTime(),
+			end: end.getTime(),
+		};
+		onUpdateTimeBlock(activity.id, timeBlock, newTimeBlock);
+	}
 
 	const events = currentView === 'month' ? getMonthViewEvents() : getWeekViewEvents();
 
 	return (
 		<div style={{ height: '1000px' }}>
-			<Calendar
+			<DnDCalendar
 				localizer={localizer}
 				events={events}
 				startAccessor="start"
@@ -164,6 +130,10 @@ export default function ActivityCalendar({ activities }: ActivityCalendarProps) 
 				style={{ height: '100%' }}
 				eventPropGetter={eventStyleGetter}
 				onView={(newView: View) => setCurrentView(newView)}
+				onEventDrop={handleEventDrop}
+				onEventResize={handleEventResize}
+				resizable={currentView === 'week'}
+				draggableAccessor={() => currentView === 'week'}
 			/>
 		</div>
 	);
