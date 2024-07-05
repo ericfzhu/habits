@@ -44,8 +44,8 @@ function EditHabitsModal({ activities, onClose, onUpdateTimeBlock }: EditHabitsM
 	}, [activities]);
 
 	return (
-		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-			<div className="bg-white p-6 rounded-lg w-3/4 max-h-3/4 overflow-auto">
+		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10 overflow-auto">
+			<div className="bg-white p-6 rounded-lg w-3/4 max-h-3/4 overflow-auto max-h-[80%]">
 				<h2 className="text-2xl font-bold mb-4">Edit Habit Times</h2>
 				<table className="w-full border-collapse border border-gray-300">
 					<thead>
