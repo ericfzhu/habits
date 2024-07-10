@@ -1,7 +1,23 @@
 'use client';
 
-import { Download, Edit2, Eye, EyeOff, PlayCircle, PlusCircle, StopCircle, Trash2, Upload } from 'lucide-react';
+import {
+	Bell,
+	ChevronDown,
+	Download,
+	Edit2,
+	Eye,
+	EyeOff,
+	MessageSquare,
+	MoreHorizontal,
+	PlayCircle,
+	PlusCircle,
+	Search,
+	StopCircle,
+	Trash2,
+	Upload,
+} from 'lucide-react';
 import moment from 'moment';
+import Link from 'next/link';
 import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Line, LineChart } from 'recharts';
@@ -103,6 +119,7 @@ export default function Home() {
 	const [currentDate, setCurrentDate] = useState<string>(getLocalDateString(new Date()));
 	const [, setTick] = useState(0);
 	const [showEditModal, setShowEditModal] = useState(false);
+	const [searchTerm, setSearchTerm] = useState('');
 
 	function getLocalDateString(date: Date): string {
 		const year = date.getFullYear();
@@ -120,6 +137,12 @@ export default function Home() {
 		}
 		return normalized;
 	}
+
+	const filteredActivities = useMemo(() => {
+		return activities.filter(
+			(activity) => activity.name.toLowerCase().includes(searchTerm.toLowerCase()) && (!activity.isDeleted || showDeletedHabits),
+		);
+	}, [activities, searchTerm, showDeletedHabits]);
 
 	useEffect(() => {
 		const loadActivities = () => {
@@ -458,107 +481,222 @@ export default function Home() {
 	}
 
 	return (
-		<div className="container mx-auto p-4">
-			<div className="mb-6 flex justify-between items-center">
-				<div>
-					<input
-						type="text"
-						value={newActivityName}
-						onChange={(e) => setNewActivityName(e.target.value)}
-						onKeyDown={handleAddActivityKeyDown}
-						placeholder="Enter new activity name"
-						className="p-2 border rounded mr-2"
-					/>
-					<button onClick={addActivity} className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
-						<PlusCircle className="inline-block mr-1" size={16} /> Add Activity
-					</button>
+		<div className="flex h-screen bg-white text-gray-800">
+			{/* Sidebar */}
+			<div className="w-64 bg-gray-100 p-4">
+				<div className="flex items-center mb-6">
+					<div className="w-8 h-8 bg-blue-600 rounded-lg mr-2"></div>
+					<span className="font-semibold">Habit Tracker</span>
+					<ChevronDown className="ml-auto" size={16} />
 				</div>
-				<div>
-					<button onClick={exportData} className="bg-green-500 text-white p-2 rounded hover:bg-green-600 mr-2">
-						<Download className="inline-block mr-1" size={16} /> Export Data
-					</button>
-					<input type="file" ref={fileInputRef} onChange={importData} style={{ display: 'none' }} accept=".json" />
-					<button onClick={() => fileInputRef.current?.click()} className="bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600">
-						<Upload className="inline-block mr-1" size={16} /> Import Data
-					</button>
+				<div className="space-y-4 flex flex-col">
+					<div className="flex items-center">
+						<Search size={16} className="mr-2" />
+						<input
+							type="text"
+							placeholder="Search habits"
+							className="bg-transparent outline-none w-full"
+							value={searchTerm}
+							onChange={(e) => setSearchTerm(e.target.value)}
+						/>
+					</div>
+					<Link className="font-semibold" href="#Activities">
+						Activities
+					</Link>
+					<div className="pl-4 space-y-2 text-sm">
+						{filteredActivities.map((activity) => (
+							<div key={activity.id} className="flex items-center justify-between">
+								<span>{activity.name}</span>
+								<div className="w-3 h-3 rounded-full" style={{ backgroundColor: activity.color }}></div>
+							</div>
+						))}
+					</div>
+					<Link className="font-semibold" href="#Calendar">
+						Calendar
+					</Link>
+					<Link className="font-semibold" href="#Charts">
+						Charts
+					</Link>
 				</div>
 			</div>
 
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-				{activities
-					.filter((activity) => !activity.isDeleted)
-					.map((activity) => (
-						<div key={activity.id} className="border rounded p-4" style={{ borderColor: activity.color }}>
-							{editingActivity === activity.id ? (
-								<input
-									type="text"
-									defaultValue={activity.name}
-									onKeyDown={(e) => handleUpdateActivityKeyDown(e, activity.id)}
-									onBlur={(e) => updateActivityName(activity.id, e.target.value)}
-									className="p-1 border rounded w-full mb-2"
-									autoFocus
-								/>
-							) : (
-								<h2 className="text-xl font-semibold mb-2 flex justify-between items-center">
-									{activity.name}
-									<div>
-										<button onClick={() => setEditingActivity(activity.id)} className="text-gray-500 hover:text-gray-700 mr-2">
-											<Edit2 size={16} />
-										</button>
-										<button onClick={() => deleteActivity(activity.id)} className="text-red-500 hover:text-red-700 mr-2">
-											<Trash2 size={16} />
-										</button>
-										<input
-											type="color"
-											value={activity.color}
-											onChange={(e) => updateActivityColor(activity.id, e.target.value)}
-											className="w-6 h-6 rounded-full cursor-pointer"
-											title="Change color"
-										/>
-									</div>
-								</h2>
-							)}
+			{/* Main content */}
+			<div className="flex-1 flex flex-col overflow-hidden">
+				{/* Header */}
+				<div className="flex items-center justify-between p-4 border-b">
+					<div className="flex items-center space-x-4">
+						<span className="font-semibold">Habit Tracker Dashboard</span>
+					</div>
+					<div className="flex items-center space-x-4">
+						<button onClick={exportData} className="text-green-500 hover:text-green-600" title="Export Data">
+							<Download size={16} />
+						</button>
+						<input type="file" ref={fileInputRef} onChange={importData} style={{ display: 'none' }} accept=".json" />
+						<button onClick={() => fileInputRef.current?.click()} className="text-yellow-500 hover:text-yellow-600" title="Import Data">
+							<Upload size={16} />
+						</button>
+						<button onClick={() => setShowEditModal(true)} className="text-blue-500 hover:text-blue-600" title="Edit Habits">
+							<Edit2 size={16} />
+						</button>
+						{/* <Bell size={16} />
+						<MessageSquare size={16} /> */}
+						<div className="w-6 h-6 bg-gray-300 rounded-full"></div>
+					</div>
+				</div>
 
-							{timerState[activity.id] ? (
-								<button
-									onClick={() => stopTimer(activity.id)}
-									className="bg-red-500 text-white p-2 rounded hover:bg-red-600 w-full mb-2">
-									<StopCircle className="inline-block mr-1" size={16} /> Stop Timer
-								</button>
-							) : (
-								<button
-									onClick={() => startTimer(activity.id)}
-									className="bg-green-500 text-white p-2 rounded hover:bg-green-600 w-full mb-2">
-									<PlayCircle className="inline-block mr-1" size={16} /> Start Timer
-								</button>
-							)}
-
-							<p className="mb-2">Today: {formatTime(getActivityTime(activity))}</p>
+				{/* Content */}
+				<div className="flex-1 p-4 overflow-auto">
+					<div className="mb-6 flex justify-between items-center" id="Activities">
+						<div className="flex items-center">
+							<input
+								type="text"
+								value={newActivityName}
+								onChange={(e) => setNewActivityName(e.target.value)}
+								onKeyDown={handleAddActivityKeyDown}
+								placeholder="Enter new activity name"
+								className="p-2 border rounded mr-2"
+							/>
+							<button onClick={addActivity} className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+								<PlusCircle className="inline-block mr-1" size={16} /> Add Activity
+							</button>
 						</div>
-					))}
-			</div>
+						<button
+							onClick={() => setShowDeletedHabits(!showDeletedHabits)}
+							className={`${showDeletedHabits ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white p-2 rounded`}>
+							{showDeletedHabits ? <EyeOff className="inline-block mr-1" size={16} /> : <Eye className="inline-block mr-1" size={16} />}
+							{showDeletedHabits ? 'Hide Deleted Habits' : 'Show Deleted Habits'}
+						</button>
+					</div>
 
-			<div className="flex justify-end items-end mb-8">
-				<button
-					onClick={() => setShowDeletedHabits(!showDeletedHabits)}
-					className={`${showDeletedHabits ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white p-2 rounded`}>
-					{showDeletedHabits ? <EyeOff className="inline-block mr-1" size={16} /> : <Eye className="inline-block mr-1" size={16} />}
-					{showDeletedHabits ? 'Hide Deleted Habits' : 'Show Deleted Habits'}
-				</button>
-			</div>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+						{filteredActivities.map((activity) => (
+							<div key={activity.id} className="border rounded p-4" style={{ borderColor: activity.color }}>
+								{editingActivity === activity.id ? (
+									<input
+										type="text"
+										defaultValue={activity.name}
+										onKeyDown={(e) => handleUpdateActivityKeyDown(e, activity.id)}
+										onBlur={(e) => updateActivityName(activity.id, e.target.value)}
+										className="p-1 border rounded w-full mb-2"
+										autoFocus
+									/>
+								) : (
+									<h2 className="text-xl font-semibold mb-2 flex justify-between items-center">
+										{activity.name}
+										<div>
+											<button
+												onClick={() => setEditingActivity(activity.id)}
+												className="text-gray-500 hover:text-gray-700 mr-2">
+												<Edit2 size={16} />
+											</button>
+											<button onClick={() => deleteActivity(activity.id)} className="text-red-500 hover:text-red-700 mr-2">
+												<Trash2 size={16} />
+											</button>
+											<input
+												type="color"
+												value={activity.color}
+												onChange={(e) => updateActivityColor(activity.id, e.target.value)}
+												className="w-6 h-6 rounded-full cursor-pointer"
+												title="Change color"
+											/>
+										</div>
+									</h2>
+								)}
 
-			{/* Calendar View */}
-			<div className="mt-8">
-				<ActivityCalendar
-					activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)}
-					onUpdateTimeBlock={handleUpdateTimeBlock}
-				/>
-			</div>
+								{timerState[activity.id] ? (
+									<button
+										onClick={() => stopTimer(activity.id)}
+										className="bg-red-500 text-white p-2 rounded hover:bg-red-600 w-full mb-2">
+										<StopCircle className="inline-block mr-1" size={16} /> Stop Timer
+									</button>
+								) : (
+									<button
+										onClick={() => startTimer(activity.id)}
+										className="bg-green-500 text-white p-2 rounded hover:bg-green-600 w-full mb-2">
+										<PlayCircle className="inline-block mr-1" size={16} /> Start Timer
+									</button>
+								)}
 
-			<div className="mt-4 flex justify-end">
-				<button onClick={() => setShowEditModal(true)} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-					Edit Habits
-				</button>
+								<p className="mb-2">{formatTime(getActivityTime(activity))}</p>
+							</div>
+						))}
+					</div>
+
+					{/* Charts and Calendar sections */}
+					<div className="space-y-8">
+						<div id="Calendar">
+							<h2 className="text-xl font-semibold mb-4">Activity Calendar</h2>
+							<ActivityCalendar
+								activities={activities.filter((activity) => !activity.isDeleted || showDeletedHabits)}
+								onUpdateTimeBlock={handleUpdateTimeBlock}
+							/>
+						</div>
+						<div id="Charts">
+							<h2 className="text-xl font-semibold mb-4">Weekly Activity</h2>
+							<div className="h-80">
+								<ResponsiveContainer width="100%" height="100%">
+									<BarChart data={getAllActivitiesWeeklyData()}>
+										<XAxis dataKey="date" />
+										<YAxis />
+										<Tooltip />
+										<Legend />
+										{activities
+											.filter((activity) => !activity.isDeleted || showDeletedHabits)
+											.map((activity) => (
+												<Bar key={activity.id} dataKey={activity.name} stackId="a" fill={activity.color} />
+											))}
+									</BarChart>
+								</ResponsiveContainer>
+							</div>
+						</div>
+
+						<div>
+							<h2 className="text-xl font-semibold mb-4">Activity Trends</h2>
+							<div className="h-80">
+								<ResponsiveContainer width="100%" height="100%">
+									<LineChart data={getAllActivitiesWeeklyData()}>
+										<XAxis dataKey="date" />
+										<YAxis />
+										<Tooltip />
+										<Legend />
+										{activities
+											.filter((activity) => !activity.isDeleted || showDeletedHabits)
+											.map((activity) => (
+												<Line key={activity.id} type="monotone" dataKey={activity.name} stroke={activity.color} />
+											))}
+									</LineChart>
+								</ResponsiveContainer>
+							</div>
+						</div>
+
+						<div>
+							<h2 className="text-xl font-semibold mb-4">Activity Distribution</h2>
+							<div className="h-80">
+								<ResponsiveContainer width="100%" height="100%">
+									<PieChart>
+										<Pie
+											data={getTotalTimeSpent()}
+											cx="50%"
+											cy="50%"
+											labelLine={false}
+											outerRadius={80}
+											fill="#8884d8"
+											dataKey="value"
+											label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+											{getTotalTimeSpent().map((entry, index) => (
+												<Cell
+													key={`cell-${index}`}
+													fill={activities.find((a) => a.name === entry.name)?.color || COLORS[index % COLORS.length]}
+												/>
+											))}
+										</Pie>
+										<Tooltip />
+									</PieChart>
+								</ResponsiveContainer>
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
 
 			{showEditModal && (
@@ -568,62 +706,6 @@ export default function Home() {
 					onUpdateTimeBlock={handleTimeBlockChange}
 				/>
 			)}
-
-			<div className="mt-8">
-				<div className="h-80 mb-8">
-					<ResponsiveContainer width="100%" height="100%">
-						<BarChart data={getAllActivitiesWeeklyData()}>
-							<XAxis dataKey="date" />
-							<YAxis />
-							<Tooltip />
-							<Legend />
-							{activities
-								.filter((activity) => !activity.isDeleted || showDeletedHabits)
-								.map((activity) => (
-									<Bar key={activity.id} dataKey={activity.name} stackId="a" fill={activity.color} />
-								))}
-						</BarChart>
-					</ResponsiveContainer>
-				</div>
-				<div className="h-80 mb-8">
-					<ResponsiveContainer width="100%" height="100%">
-						<LineChart data={getAllActivitiesWeeklyData()}>
-							<XAxis dataKey="date" />
-							<YAxis />
-							<Tooltip />
-							<Legend />
-							{activities
-								.filter((activity) => !activity.isDeleted || showDeletedHabits)
-								.map((activity) => (
-									<Line key={activity.id} type="monotone" dataKey={activity.name} stroke={activity.color} />
-								))}
-						</LineChart>
-					</ResponsiveContainer>
-				</div>
-				<div className="h-80">
-					<ResponsiveContainer width="100%" height="100%">
-						<PieChart>
-							<Pie
-								data={getTotalTimeSpent()}
-								cx="50%"
-								cy="50%"
-								labelLine={false}
-								outerRadius={80}
-								fill="#8884d8"
-								dataKey="value"
-								label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-								{getTotalTimeSpent().map((entry, index) => (
-									<Cell
-										key={`cell-${index}`}
-										fill={activities.find((a) => a.name === entry.name)?.color || COLORS[index % COLORS.length]}
-									/>
-								))}
-							</Pie>
-							<Tooltip />
-						</PieChart>
-					</ResponsiveContainer>
-				</div>
-			</div>
 		</div>
 	);
 }
